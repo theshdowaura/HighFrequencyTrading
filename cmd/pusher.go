@@ -11,9 +11,15 @@ var (
 	subCmd = &cobra.Command{
 		Use:   "wxpusher",
 		Short: "推送消息",
-		Long:  "推送消息到wxpusher中",
+		Long:  "推送消息到wxpusher",
+		Example: `  telecom wxpusher -a <apptoken> -u <uid>
+  或者通过配置文件 wxpusher.yaml 设置`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+
 			var wxpusher util.Wxpusher
+			if wxpusher.AppToken != "" && wxpusher.Uid != "" {
+				return nil // 使用命令行参数
+			}
 
 			// 读取配置文件
 			data, err := os.ReadFile("wxpusher.yaml")

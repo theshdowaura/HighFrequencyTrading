@@ -40,6 +40,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&useHFlag, "useH", false, "是否启用 -h 参数")
 	subCmd.Flags().StringVar(&wxpusher.AppToken, "a", "", "wxpusher的apptoken")
 	subCmd.Flags().StringVar(&wxpusher.Uid, "u", "", "wxpusher的uid的值")
+	rootCmd.AddCommand(subCmd)
 }
 
 // RunMain 真正执行流程
