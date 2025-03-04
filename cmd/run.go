@@ -43,7 +43,7 @@ func MainLogic(cfg *config.Config) {
 		go func(accountStr string) {
 			defer wg.Done()
 			fields := strings.Split(accountStr, "#")
-			// 如果只有两个字段，默认 uid 为 phone
+			// 如果只有两个字段，默认 Uid 为 phone
 			if len(fields) < 2 {
 				log.Printf("[Error] 账号格式错误: %s", accountStr)
 				return

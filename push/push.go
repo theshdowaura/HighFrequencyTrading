@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 )
 
 // Message 定义发送消息的请求结构
@@ -25,7 +26,11 @@ type Response struct {
 // Send 发送消息到WxPusher
 func Send(content, appToken, uid string) (*Response, error) {
 	if appToken == "" || uid == "" {
-		return nil, errors.New("WXPUSHER_APP_TOKEN 或 WXPUSHER_UID 未设置")
+		return nil, errors.New("WXPUSHER_APP_TOKEN 或 WXPUSHER_UID 未设置,将自动使用环境变量")
+	} else {
+		appToken = os.Getenv("WXPUSHER_APP_TOKEN")
+		uid = os.Getenv("WXPUSHER_UID")
+		print(appToken, uid)
 	}
 
 	message := Message{

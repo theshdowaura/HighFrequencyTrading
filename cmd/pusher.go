@@ -1,15 +1,15 @@
 package cmd
 
 import (
-	"HighFrequencyTrading/push"
+	"HighFrequencyTrading/util"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 var (
 	// 子命令的配置参数
-	content  string
-	appToken string
-	uid      string
+	content string
+
 	// 定义子命令
 	subCmd = &cobra.Command{
 		Use:   "wxpusher",
@@ -17,10 +17,12 @@ var (
 		Long:  "推送消息到wxpusher中",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// 子命令的执行逻辑
-			if content == "" || appToken == "" || uid == "" {
+			var wxpusher util.Wxpusher
+			if wxpusher.AppToken == "" || wxpusher.Uid == "" {
+				println("未设置推送详细配置")
 				return nil
 			} else {
-				push.Send(content, appToken, uid)
+				os.ReadFile("wxpusher.yaml")
 			}
 			return nil
 		},

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"HighFrequencyTrading/util"
 	"fmt"
 
 	"HighFrequencyTrading/config"
@@ -32,11 +33,13 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&jdhfFlag, "jdhf", "", "电信账号信息,格式 phone#password#uid(&phone2#pwd2#uid2)")
+	var wxpusher util.Wxpusher
+	rootCmd.PersistentFlags().StringVar(&jdhfFlag, "jdhf", "", "电信账号信息,格式 phone#password#Uid(&phone2#pwd2#uid2)")
 	rootCmd.PersistentFlags().StringVar(&mexzFlag, "mexz", "", "兑换策略,如 0.5,5,6;1,10,3")
 	rootCmd.PersistentFlags().IntVar(&hFlag, "h", 0, "9(上午场) 或 13(下午场)")
 	rootCmd.PersistentFlags().BoolVar(&useHFlag, "useH", false, "是否启用 -h 参数")
-	subCmd.Flags().StringVar(&content, "p", "", "微信推送器")
+	subCmd.Flags().StringVar(&wxpusher.AppToken, "a", "", "wxpusher的apptoken")
+	subCmd.Flags().StringVar(&wxpusher.Uid, "u", "", "wxpusher的uid的值")
 }
 
 // RunMain 真正执行流程
