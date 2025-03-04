@@ -36,19 +36,19 @@ func TestWxPusherCommand(t *testing.T) {
 		{
 			name: "正常配置测试",
 			yaml: `appToken: "test-token"
-uid: "test-uid"`,
+Uid: "test-Uid"`,
 			wantErr: false,
 		},
 		{
 			name: "空配置测试",
 			yaml: `appToken: ""
-uid: ""`,
+Uid: ""`,
 			wantErr: false,
 		},
 		{
 			name: "错误格式测试",
 			yaml: `appToken: test-token
-uid: [invalid-yaml`,
+Uid: [invalid-yaml`,
 			wantErr: true,
 		},
 	}
@@ -105,7 +105,7 @@ func TestWxPusherCommandNoFile(t *testing.T) {
 func TestWxPusherStruct(t *testing.T) {
 	wxpusher := util.Wxpusher{
 		AppToken: "test-token",
-		Uid:      "test-uid",
+		Uid:      "test-Uid",
 	}
 
 	if wxpusher.AppToken == "" || wxpusher.Uid == "" {
