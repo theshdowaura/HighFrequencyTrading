@@ -14,7 +14,7 @@ import (
 	"errors"
 )
 
-// Encrypt3DES CBC模式
+// Encrypt3DES : CBC模式
 func Encrypt3DES(key, iv, plaintext []byte) (string, error) {
 	block, err := des.NewTripleDESCipher(key)
 	if err != nil {
@@ -30,7 +30,7 @@ func Encrypt3DES(key, iv, plaintext []byte) (string, error) {
 	return hex.EncodeToString(out), nil
 }
 
-// Decrypt3DES CBC模式
+// Decrypt3DES : CBC模式
 func Decrypt3DES(key, iv []byte, cipherHex string) (string, error) {
 	data, err := hex.DecodeString(cipherHex)
 	if err != nil {
@@ -53,7 +53,7 @@ func Decrypt3DES(key, iv []byte, cipherHex string) (string, error) {
 	return string(out), nil
 }
 
-// EncryptRSA 公钥加密 -> base64
+// EncryptRSA : 公钥加密 -> base64
 func EncryptRSA(pubPEM string, plaintext []byte) (string, error) {
 	block, _ := pem.Decode([]byte(pubPEM))
 	if block == nil {
@@ -74,7 +74,7 @@ func EncryptRSA(pubPEM string, plaintext []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(encrypted), nil
 }
 
-// EncryptRSAHex 公钥加密 -> hex
+// EncryptRSAHex : 公钥加密 -> hex
 func EncryptRSAHex(pubPEM string, plaintext []byte) (string, error) {
 	block, _ := pem.Decode([]byte(pubPEM))
 	if block == nil {
@@ -95,7 +95,7 @@ func EncryptRSAHex(pubPEM string, plaintext []byte) (string, error) {
 	return hex.EncodeToString(encrypted), nil
 }
 
-// EncryptAES_ECB AES ECB模式(不安全，但兼容需求)
+// EncryptAES_ECB : AES ECB模式(不安全，但兼容需求)
 func EncryptAES_ECB(key, plaintext []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

@@ -18,14 +18,14 @@ const (
 	DefaultMEXZ      = "0.5,5,6;1,10,3"
 )
 
-// Config 存放命令行和环境变量参数
+// Config : 存放命令行和环境变量
 type Config struct {
-	Jdhf string // 账号信息
-	MEXZ string // 兑换策略
-	H    *int   // 9/13 场
+	Jdhf string
+	MEXZ string
+	H    *int
 }
 
-// GlobalVars 运行期的全局对象
+// GlobalVars : 运行期的全局对象
 type GlobalVars struct {
 	Yf    string                       // 当前年月: e.g. "202503"
 	Dhjl  map[string]map[string]string // 兑换日志
@@ -39,15 +39,15 @@ type GlobalVars struct {
 	AfternoonExchanges []string
 }
 
-// NewConfig 环境变量优先级 > CLI
+// NewConfig : 环境变量优先级>命令行
 func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	cfg := &Config{}
-	// 优先用命令行
+	// 先用 CLI
 	cfg.Jdhf = cliJdhf
 	cfg.MEXZ = cliMEXZ
 	cfg.H = cliH
 
-	// 再看环境变量
+	// 后看 ENV
 	if envJdhf := os.Getenv("jdhf"); envJdhf != "" {
 		cfg.Jdhf = envJdhf
 	}
@@ -66,7 +66,7 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	return cfg
 }
 
-// InitGlobalVars 解析日志,缓存, MEXZ
+// InitGlobalVars : 解析日志,缓存,MEXZ
 func InitGlobalVars(cfg *Config) *GlobalVars {
 	g := &GlobalVars{}
 	g.Yf = time.Now().Format("200601")
@@ -105,7 +105,7 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 		g.MorningExchanges = parseExchanges(parts[0])
 		g.AfternoonExchanges = parseExchanges(parts[1])
 	} else {
-		log.Println("[Warn] MEXZ 格式不正确, 使用默认 0.5,5,6;1,10,3")
+		log.Println("[Warn] MEXZ 格式不正确,使用默认")
 		g.MorningExchanges = parseExchanges("0.5,5,6")
 		g.AfternoonExchanges = parseExchanges("1,10,3")
 	}
@@ -113,7 +113,7 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	return g
 }
 
-// parseExchanges "0.5,5,6" -> ["0.5元话费","5元话费","6元话费"]
+// parseExchanges : "0.5,5,6" -> ["0.5元话费","5元话费","6元话费"]
 func parseExchanges(raw string) []string {
 	arr := strings.Split(raw, ",")
 	var res []string
@@ -123,19 +123,19 @@ func parseExchanges(raw string) []string {
 	return res
 }
 
-// SaveDhjl 保存兑换日志
+// SaveDhjl : 保存兑换日志
 func (g *GlobalVars) SaveDhjl() {
 	bt, _ := json.Marshal(g.Dhjl)
 	_ = ioutil.WriteFile(ExchangeLogFile, bt, 0644)
 }
 
-// SaveCache 保存token缓存
+// SaveCache : 保存 token 缓存
 func (g *GlobalVars) SaveCache() {
 	bt, _ := json.Marshal(g.Cache)
 	_ = ioutil.WriteFile(CacheFile, bt, 0644)
 }
 
-// Debug 展示当前配置信息
+// Debug : 可选调试
 func (cfg *Config) Debug() {
 	fmt.Printf("[DEBUG] jdhf=%s MEXZ=%s H=%v\n", cfg.Jdhf, cfg.MEXZ, cfg.H)
 }
