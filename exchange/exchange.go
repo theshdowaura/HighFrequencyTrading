@@ -48,7 +48,7 @@ func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *s
 				return
 			}
 			go func() {
-				resp, err := client.Get("https://example.com/ping")
+				resp, err := client.Get("https://wapact.189.cn:9001/gateway/standExchange/detailNew/exchange")
 				if err == nil {
 					resp.Body.Close()
 				}
@@ -91,7 +91,7 @@ func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, 
 		if float64(time.Now().Unix()) >= wt {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(5 * time.Millisecond)
 	}
 	log.Printf("[Dh] phone=%s title=%s 开始兑换", phone, title)
 	One(g, phone, title, aid, uid, client)
