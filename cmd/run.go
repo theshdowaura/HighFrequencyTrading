@@ -15,7 +15,6 @@ import (
 	"HighFrequencyTrading/sign"
 )
 
-// MainLogic : 原脚本的核心流程
 func MainLogic(cfg *config.Config) {
 	log.Println("===== 电信金豆换话费(Go版) 启动 =====")
 
@@ -39,11 +38,9 @@ func MainLogic(cfg *config.Config) {
 	var wg sync.WaitGroup
 	for _, a := range accs {
 		wg.Add(1)
-		// 在 cmd/run.go 的匿名函数中对每个账号解析时进行如下修改：
 		go func(accountStr string) {
 			defer wg.Done()
 			fields := strings.Split(accountStr, "#")
-			// 如果只有两个字段，默认 Uid 为 phone
 			if len(fields) < 2 {
 				log.Printf("[Error] 账号格式错误: %s", accountStr)
 				return
@@ -81,7 +78,6 @@ func MainLogic(cfg *config.Config) {
 				Ks(g, phone, ticket, uid, client, cfg)
 			}
 		}(a)
-
 	}
 	wg.Wait()
 
@@ -108,7 +104,7 @@ func Ks(g *config.GlobalVars, phone, ticket, uid string, client *http.Client, cf
 	// 模拟查询金豆余额
 	time.Sleep(300 * time.Millisecond)
 
-	// 假设获取到商品列表
+	// 假设获取到商品列表 (示例)
 	mockItems := []struct {
 		Title string
 		ID    string
@@ -144,8 +140,39 @@ func Ks(g *config.GlobalVars, phone, ticket, uid string, client *http.Client, cf
 	target := exchange.CalcT(nowH)
 	g.Wt = float64(target) + g.Kswt
 
-	// 分发 dh
+	// 从 g.Jp 中取出对应场次的可兑换商品
 	d := g.Jp[fmt.Sprintf("%d", nowH)]
+
+	// =========== 新增/修改：先收集所有 title / aid，方便 1 秒真实预热 ===========
+	var titles, aids []string
+	for di, aid := range d {
+		titles = append(titles, di)
+		aids = append(aids, aid)
+	}
+
+	// =========== 新增/修改：做 3 秒空请求、1 秒真实预热 ===========
+
+	var wgWarmUp sync.WaitGroup
+
+	// 3 秒前空请求
+	threeSecBefore := time.Unix(int64(g.Wt), 0).Add(-3 * time.Second)
+	if time.Now().Before(threeSecBefore) {
+		wgWarmUp.Add(1)
+		go exchange.DoHighFreqRequests(threeSecBefore, phone, client, &wgWarmUp)
+	}
+
+	// 1 秒前真实预热
+	oneSecBefore := time.Unix(int64(g.Wt), 0).Add(-1 * time.Second)
+	if time.Now().Before(oneSecBefore) {
+		wgWarmUp.Add(1)
+		go exchange.DoHighFreqRealRequests(oneSecBefore, phone, ticket, titles, aids, client, &wgWarmUp)
+	}
+
+	// 等待预热全部完成
+	wgWarmUp.Wait()
+
+	// =========== 原逻辑：正式调用 Dh (在 g.Wt 时间点) ===========
+
 	for di, aid := range d {
 		if _, ok := g.Dhjl[g.Yf][di]; !ok {
 			g.Dhjl[g.Yf][di] = ""
@@ -162,11 +189,12 @@ func Ks(g *config.GlobalVars, phone, ticket, uid string, client *http.Client, cf
 			log.Println("[Ks] 等待时间超过30分钟,提前退出")
 			return
 		}
+		// 最终要在 g.Wt 时间点触发的兑换操作
 		go exchange.Dh(g, phone, di, aid, g.Wt, uid, client)
 	}
 }
 
-// handleExchangeLog2 : 转换日志到 电信金豆换话费2.log
+// handleExchangeLog2 : 转换日志
 func handleExchangeLog2(g *config.GlobalVars) {
 	nowMonth := time.Now().Format("200601")
 	oldLog := g.Dhjl
