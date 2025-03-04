@@ -49,6 +49,7 @@ func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *s
 			}
 			go func() {
 				resp, err := client.Get("https://wapact.189.cn:9001/gateway/standExchange/detailNew/exchange")
+				log.Printf("[DoHighFreqRealRequests] phone=%s title=%s(强发)", phone)
 				if err == nil {
 					resp.Body.Close()
 				}
@@ -58,7 +59,7 @@ func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *s
 }
 
 // DoHighFreqRealRequests : 目标时间前1秒“真实预热”
-func DoHighFreqRealRequests(stop time.Time, phone, ticket string, titles, aids []string, client *http.Client, wg *sync.WaitGroup) {
+func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string, client *http.Client, wg *sync.WaitGroup) {
 	defer wg.Done()
 	tick := time.NewTicker(200 * time.Millisecond)
 	defer tick.Stop()
