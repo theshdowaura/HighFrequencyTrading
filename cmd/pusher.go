@@ -35,10 +35,11 @@ var (
 	AppToken string
 	Uid      string
 
-	subCmd = &cobra.Command{
+	// 重命名为 wxpusherCmd，避免和全局命令冲突
+	wxpusherCmd = &cobra.Command{
 		Use:   "wxpusher",
 		Short: "推送消息",
-		Long:  "推送消息到wxpusher",
+		Long:  "推送消息到 wxpusher",
 		Example: `  telecom wxpusher -a <AppToken> -u <Uid>
   或者通过配置文件 wxpusher.yaml 设置`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -48,34 +49,35 @@ var (
 			AppTokenEnv := os.Getenv("WXPUSHER_APP_TOKEN")
 			UidEnv := os.Getenv("WXPUSHER_UID")
 
-			// 如果环境变量存在，则使用环境变量的值
 			if AppTokenEnv != "" && UidEnv != "" {
 				wxpusher.AppToken = AppTokenEnv
 				wxpusher.Uid = UidEnv
 			} else if AppToken != "" && Uid != "" {
-				// 如果命令行参数存在，使用命令行参数
 				wxpusher.AppToken = AppToken
 				wxpusher.Uid = Uid
 			} else {
-				// 环境变量和命令行参数都为空时，才尝试读取配置文件
+				// 当环境变量和命令行参数均为空时，尝试读取配置文件
 				config, err := LoadConfig("wxpusher.yaml")
 				if err != nil {
 					return err
 				}
-
-				// 将配置应用到wxpusher实例
 				wxpusher.AppToken = config.AppToken
 				wxpusher.Uid = config.Uid
 			}
 
-			// 验证配置
 			if wxpusher.AppToken == "" || wxpusher.Uid == "" {
 				println("未设置推送详细配置")
 				return nil
 			}
 
-			// 这里添加您的业务逻辑
+			// 在这里添加您的 wxpusher 业务逻辑
 			return nil
 		},
 	}
 )
+
+func init() {
+	// 使用 StringVarP 定义带有短标志的参数
+	wxpusherCmd.Flags().StringVarP(&AppToken, "app-token", "a", "", "wxpusher的apptoken")
+	wxpusherCmd.Flags().StringVarP(&Uid, "uid", "u", "", "wxpusher的uid的值")
+}
