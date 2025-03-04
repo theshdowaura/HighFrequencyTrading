@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"HighFrequencyTrading/auth"
 	"HighFrequencyTrading/config"
 	"HighFrequencyTrading/exchange"
+	"HighFrequencyTrading/sign"
 )
 
 // MainLogic : 原脚本的核心流程
@@ -64,13 +64,13 @@ func MainLogic(cfg *config.Config) {
 				vm := v.(map[string]interface{})
 				userId := vm["userId"].(string)
 				token := vm["token"].(string)
-				if tk, err := auth.GetTicket(g, phone, userId, token, client); err == nil {
+				if tk, err := sign.GetTicket(phone, userId, token); err == nil {
 					ticket = tk
 				}
 			}
 			if ticket == "" {
 				log.Printf("[PwdLogin] phone=%s", phone)
-				tk, err := auth.UserLoginNormal(g, phone, password, client)
+				tk, err := sign.UserLoginNormal(phone, password)
 				if err != nil {
 					log.Printf("[Error] phone=%s 登录失败: %v", phone, err)
 					return
