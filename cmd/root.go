@@ -41,7 +41,7 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&jdhfFlag, "jdhf", "", "电信账号信息,格式 phone#password#Uid(&phone2#pwd2#uid2)")
 	rootCmd.PersistentFlags().StringVar(&mexzFlag, "mexz", "0.5,5;1,10", "兑换策略,如 0.5,5,6;1,10,3")
-	rootCmd.PersistentFlags().IntVar(&hFlag, "trade-hour", 0, "交易时段: 9(上午场) 或 13(下午场)")
+	rootCmd.PersistentFlags().IntVar(&hFlag, "trade-hour", 0, "交易时段: 10(上午场) 或 14(下午场)")
 	rootCmd.PersistentFlags().BoolVar(&useTradeHour, "use-trade-hour", false, "是否启用交易时段参数")
 
 	// 注册 wxpusher 子命令

@@ -17,7 +17,7 @@ const (
 	ExchangeLogFile  = "电信金豆换话费.log"
 	ExchangeLogFile2 = "电信金豆换话费2.log"
 	CacheFile        = "chinaTelecom_cache.json"
-	DefaultMEXZ      = "0.5,5,6;1,10,3"
+	DefaultMEXZ      = "0.5,5;1,10"
 )
 
 // Config : 存放命令行和环境变量的配置
@@ -74,7 +74,7 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 func InitGlobalVars(cfg *Config) *GlobalVars {
 	g := &GlobalVars{
 		Dhjl:  make(map[string]map[string][]string),
-		Jp:    map[string]map[string]string{"9": {}, "13": {}},
+		Jp:    map[string]map[string]string{"10": {}, "14": {}},
 		Cache: make(map[string]string),
 	}
 

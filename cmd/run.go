@@ -205,9 +205,9 @@ func updateGlobalProducts(g *config.GlobalVars, items []struct{ Title, ID string
 
 	for _, item := range items {
 		if exchange.InStringArray(item.Title, morningEx) {
-			g.Jp["9"][item.Title] = item.ID
+			g.Jp["10"][item.Title] = item.ID
 		} else if exchange.InStringArray(item.Title, afternoonEx) {
-			g.Jp["13"][item.Title] = item.ID
+			g.Jp["14"][item.Title] = item.ID
 		}
 	}
 }
@@ -218,9 +218,9 @@ func determineTradeHour(cfg *config.Config) int {
 	}
 	nowH := time.Now().Hour()
 	if nowH < 11 {
-		return 9
+		return 10
 	}
-	return 13
+	return 14
 }
 
 func collectProductInfo(products map[string]string) ([]string, []string) {
