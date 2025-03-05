@@ -1,4 +1,3 @@
-// 文件：cmd/cmd.go
 package cmd
 
 import (
@@ -57,7 +56,7 @@ func MainLogic(cfg *config.Config) {
 	handleExchangeLog(g)
 
 	// 5. 检查推送（可选）
-	exchange.PushSummary(g, Uid)
+	exchange.PushSummary(g, Uid) // 如有需要可调整传入参数
 
 	log.Println("===== 高频交易系统结束 =====")
 }
@@ -92,14 +91,11 @@ func getUID(fields []string, phone string) string {
 
 // getToken 封装缓存处理逻辑：先尝试从缓存中取 token，否则重新登录获取
 func getToken(phone, password string, g *config.GlobalVars) string {
-	// 1. 如果缓存中已有 token，直接返回
 	if cachedToken, ok := g.Cache[phone]; ok {
 		log.Printf("[Cache] phone=%s 命中缓存", phone)
-		// 如有需要，可在此处验证 token 是否依然有效
 		return cachedToken
 	}
 
-	// 2. 缓存中没有，则重新登录
 	log.Printf("[Login] phone=%s 开始重新登录", phone)
 	token, err := sign.UserLoginNormal(phone, password)
 	if err != nil {
@@ -107,7 +103,6 @@ func getToken(phone, password string, g *config.GlobalVars) string {
 		return ""
 	}
 
-	// 3. 登录成功后，将新 token 存入缓存并写回文件
 	g.Cache[phone] = token
 	g.SaveCache()
 
@@ -136,14 +131,13 @@ func executeTrading(g *config.GlobalVars, phone, token, uid string, client *http
 	// 执行实际交易
 	var tradeWg sync.WaitGroup
 	for title, aid := range products {
-		// 检查是否已兑换
 		if isAlreadyTraded(g, title, int32(phoneNum)) {
 			log.Printf("[Skip] %d %s 已兑换", phoneNum, title)
 			continue
 		}
-		// 如果距离目标时间超过30秒，则退出
+		// 修改此处：等待时间超过 30 分钟则退出
 		if isWaitingTooLong(targetTime) {
-			log.Println("[Timeout] 等待时间超过30秒，退出")
+			log.Println("[Timeout] 等待时间超过30分钟，退出")
 			return
 		}
 		log.Printf("[Trade] phone=%d item=%s", phoneNum, title)
@@ -213,12 +207,10 @@ func collectProductInfo(products map[string]string) ([]string, []string) {
 func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []string, client *http.Client, targetTime float64) {
 	var wg sync.WaitGroup
 
-	// 基准时间
 	baseTime := time.Unix(int64(targetTime), 0)
 	emptyRequestTime := baseTime.Add(-3 * time.Second)
 	realRequestTime := baseTime.Add(-1 * time.Second)
 
-	// 阶段1：3秒前的空请求抢发
 	if time.Now().Before(emptyRequestTime) {
 		wg.Add(1)
 		go func() {
@@ -231,7 +223,6 @@ func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []strin
 		log.Println("[Warmup] 抢发阶段时间点已过，跳过")
 	}
 
-	// 阶段2：1秒前的实际预热
 	if time.Now().Before(realRequestTime) {
 		wg.Add(1)
 		go func() {
@@ -262,7 +253,6 @@ func scheduleStage(scheduledTime time.Time, stageName string, task func()) {
 func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
 	phones, ok := g.Dhjl[g.Yf][title]
 	if !ok {
-		// 当前商品尚无兑换记录，初始化为空切片
 		g.Dhjl[g.Yf][title] = []string{}
 		return false
 	}
@@ -275,9 +265,9 @@ func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
 	return false
 }
 
-// isWaitingTooLong 若当前时间与目标时间差超过30秒则返回 true
+// isWaitingTooLong 判断若当前时间与目标时间差超过30分钟则返回 true
 func isWaitingTooLong(targetTime float64) bool {
-	return float64(time.Now().Unix())-targetTime > 30
+	return float64(time.Now().Unix())-targetTime > 1800
 }
 
 // waitUntilTargetTime 等待直到目标时间到达

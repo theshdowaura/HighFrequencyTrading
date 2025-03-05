@@ -11,9 +11,8 @@ import (
 type WxpusherConfig struct {
 	AppToken string `yaml:"appToken"`
 	Uid      string `yaml:"uid"`
-	// 如果有其他配置项，可以继续添加
-	Topic string `yaml:"topic,omitempty"`
-	Debug bool   `yaml:"debug,omitempty"`
+	Topic    string `yaml:"topic,omitempty"`
+	Debug    bool   `yaml:"debug,omitempty"`
 }
 
 // LoadConfig 加载YAML配置文件
@@ -35,28 +34,30 @@ var (
 	AppToken string
 	Uid      string
 
-	// 重命名为 wxpusherCmd，避免和全局命令冲突
+	// CLI子命令优先级顺序:
+	// 1. 环境变量 (最高)
+	// 2. CLI 参数
+	// 3. YAML 配置文件 (最低)
 	wxpusherCmd = &cobra.Command{
 		Use:   "wxpusher",
 		Short: "推送消息",
 		Long:  "推送消息到 wxpusher",
-		Example: `  telecom wxpusher -a <AppToken> -u <Uid>
-  或者通过配置文件 wxpusher.yaml 设置`,
+		Example: `telecom wxpusher -a <AppToken> -u <Uid>
+或通过配置文件 wxpusher.yaml 设置`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var wxpusher util.Wxpusher
 
-			// 优先从环境变量获取配置
-			AppTokenEnv := os.Getenv("WXPUSHER_APP_TOKEN")
-			UidEnv := os.Getenv("WXPUSHER_UID")
-
-			if AppTokenEnv != "" && UidEnv != "" {
-				wxpusher.AppToken = AppTokenEnv
-				wxpusher.Uid = UidEnv
+			// 按优先级获取配置：环境变量 → CLI参数 → YAML配置文件
+			if envAppToken, envUid := os.Getenv("WXPUSHER_APP_TOKEN"), os.Getenv("WXPUSHER_UID"); envAppToken != "" && envUid != "" {
+				// 优先级 1：环境变量
+				wxpusher.AppToken = envAppToken
+				wxpusher.Uid = envUid
 			} else if AppToken != "" && Uid != "" {
+				// 优先级 2：CLI 参数
 				wxpusher.AppToken = AppToken
 				wxpusher.Uid = Uid
 			} else {
-				// 当环境变量和命令行参数均为空时，尝试读取配置文件
+				// 优先级 3：YAML 配置文件
 				config, err := LoadConfig("wxpusher.yaml")
 				if err != nil {
 					return err
@@ -70,7 +71,8 @@ var (
 				return nil
 			}
 
-			// 在这里添加您的 wxpusher 业务逻辑（如实际发送推送）...
+			// 这里可以添加实际的推送业务逻辑
+			// 例如调用推送接口 sendWxPusher(wxpusher.AppToken, wxpusher.Uid, msg)
 
 			return nil
 		},
@@ -78,7 +80,7 @@ var (
 )
 
 func init() {
-	// 使用 StringVarP 定义带有短标志的参数
-	wxpusherCmd.Flags().StringVarP(&AppToken, "app-token", "a", "", "wxpusher的apptoken")
-	wxpusherCmd.Flags().StringVarP(&Uid, "uid", "u", "", "wxpusher的uid的值")
+	// 定义 CLI 参数
+	wxpusherCmd.Flags().StringVarP(&AppToken, "app-token", "a", "", "wxpusher的appToken")
+	wxpusherCmd.Flags().StringVarP(&Uid, "uid", "u", "", "wxpusher的uid")
 }

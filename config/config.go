@@ -107,8 +107,8 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 		g.AfternoonExchanges = parseExchanges(parts[1])
 	} else {
 		log.Println("[Warn] MEXZ 格式不正确, 使用默认配置")
-		g.MorningExchanges = parseExchanges("0.5,5,6")
-		g.AfternoonExchanges = parseExchanges("1,10,3")
+		g.MorningExchanges = parseExchanges("0.5,5")
+		g.AfternoonExchanges = parseExchanges("1,10")
 	}
 
 	return g
