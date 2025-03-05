@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -305,12 +306,10 @@ func isWaitingTooLong(targetTime float64) bool {
 }
 
 func waitUntilTargetTime(targetTime float64) {
-	for {
-		nowUnix := float64(time.Now().Unix())
-		if nowUnix >= targetTime {
-			break
-		}
-		time.Sleep(time.Second)
+	targetTimeObj := time.Unix(int64(targetTime), int64((targetTime-math.Floor(targetTime))*1e9))
+	duration := time.Until(targetTimeObj)
+	if duration > 0 {
+		time.Sleep(duration)
 	}
 }
 
