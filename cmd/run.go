@@ -92,11 +92,14 @@ func getTicket(phone, password string, g *config.GlobalVars) string {
 	// 尝试使用缓存
 	if v, ok := g.Cache[phone]; ok {
 		log.Printf("[Cache] phone=%s 使用缓存", phone)
-		vm := v.(map[string]interface{})
-		userId := vm["userId"].(string)
-		token := vm["token"].(string)
-		if tk, err := sign.GetTicket(phone, userId, token); err == nil {
-			return tk
+		if vm, ok := v.(map[string]interface{}); ok {
+			if userId, ok1 := vm["userId"].(string); ok1 {
+				if token, ok2 := vm["token"].(string); ok2 {
+					if tk, err := sign.GetTicket(phone, userId, token); err == nil {
+						return tk
+					}
+				}
+			}
 		}
 	}
 
@@ -197,9 +200,8 @@ func executeWarmupStages(g *config.GlobalVars, phone string, titles, aids []stri
 	if time.Now().Before(emptyRequestTime) {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			scheduleStage(emptyRequestTime, "抢发阶段", func() {
-				exchange.DoHighFreqRequests(emptyRequestTime, phone, client, nil)
+				exchange.DoHighFreqRequests(emptyRequestTime, phone, client, &wg)
 			})
 		}()
 	} else {
@@ -210,9 +212,8 @@ func executeWarmupStages(g *config.GlobalVars, phone string, titles, aids []stri
 	if time.Now().Before(realRequestTime) {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			scheduleStage(realRequestTime, "预热阶段", func() {
-				exchange.DoHighFreqRealRequests(realRequestTime, phone, titles, aids, client, nil)
+				exchange.DoHighFreqRealRequests(realRequestTime, phone, titles, aids, client, &wg)
 			})
 		}()
 	} else {
@@ -258,7 +259,7 @@ func isAlreadyTraded(g *config.GlobalVars, title, phone string) bool {
 }
 
 func isWaitingTooLong(targetTime float64) bool {
-	return targetTime-float64(time.Now().Unix()) > 1800
+	return targetTime-float64(time.Now().Unix()) > 120
 }
 
 // waitUntilTargetTime 等待直到目标时间到达

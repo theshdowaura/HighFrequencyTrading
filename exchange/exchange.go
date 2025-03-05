@@ -92,7 +92,7 @@ func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, 
 		if float64(time.Now().Unix()) >= wt {
 			break
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 	log.Printf("[Dh] phone=%s title=%s 开始兑换", phone, title)
 	One(g, phone, title, aid, uid, client)
@@ -134,9 +134,9 @@ func InStringArray(s string, arr []string) bool {
 	return false
 }
 
-// CalcT : 计算当天 hour=h, minute=59, second=20
+// CalcT : 计算当天 hour=h, minute=59, second=59
 func CalcT(h int) int64 {
 	now := time.Now()
-	tm := time.Date(now.Year(), now.Month(), now.Day(), h, 59, 20, 0, now.Location())
+	tm := time.Date(now.Year(), now.Month(), now.Day(), h, 59, 59, 59, now.Location())
 	return tm.Unix()
 }
