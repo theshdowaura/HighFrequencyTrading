@@ -3,6 +3,7 @@ package exchange
 import (
 	"HighFrequencyTrading/config"
 	"HighFrequencyTrading/push"
+	"HighFrequencyTrading/util"
 	"fmt"
 	"log"
 	"net/http"
@@ -116,17 +117,22 @@ func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, 
 // sendWxPusher 发送消息，消息内容包含 title 与 phone 信息
 func sendWxPusher(uid, content string) {
 	appToken := os.Getenv("WXPUSHER_APP_TOKEN")
-	if appToken == "" {
+	var wxpusher util.Wxpusher
+	if appToken == "" && wxpusher.AppToken == "" {
 		log.Println("[sendWxPusher] WXPUSHER_APP_TOKEN 未配置")
 		return
+	} else {
+		appToken = wxpusher.AppToken
 	}
 	// 如果 uid 为空，则尝试从环境变量中获取
-	if uid == "" {
+	if uid == "" && wxpusher.Uid == "" {
 		uid = os.Getenv("WXPUSHER_UID")
 		if uid == "" {
 			log.Println("[sendWxPusher] WXPUSHER_UID 未配置")
 			return
 		}
+	} else {
+		uid = wxpusher.Uid
 	}
 	resp, err := push.Send(content, appToken, uid)
 	if err != nil {
@@ -138,30 +144,20 @@ func sendWxPusher(uid, content string) {
 
 // CheckPushTime 判断时间段，若在指定推送时间则生成汇总消息并推送出去
 // 此函数需要传入全局变量 g 与 uid，以便获取兑换记录并进行消息推送
-func CheckPushTime(g *config.GlobalVars, uid string) {
-	now := time.Now()
-	start1 := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 30, 0, now.Location())
-	end1 := time.Date(now.Year(), now.Month(), now.Day(), 11, 0, 0, 0, now.Location())
-	start2 := time.Date(now.Year(), now.Month(), now.Day(), 14, 0, 30, 0, now.Location())
-	end2 := time.Date(now.Year(), now.Month(), now.Day(), 15, 0, 0, 0, now.Location())
-
-	if (now.After(start1) && now.Before(end1)) || (now.After(start2) && now.Before(end2)) {
-		log.Println("[CheckPushTime] 在推送时间,执行汇总推送消息")
-		var builder strings.Builder
-		builder.WriteString("兑换汇总:\n")
-		// 假设 g.Dhjl 为 map，其中 key 为产品分类（例如 g.Yf），value 为 map[title][]phone
-		for title, phones := range g.Dhjl[g.Yf] {
-			builder.WriteString(fmt.Sprintf("商品: %s\n", title))
-			for _, phone := range phones {
-				builder.WriteString(fmt.Sprintf("  手机号: %s\n", phone))
-			}
+// PushSummary 生成兑换汇总消息并推送
+func PushSummary(g *config.GlobalVars, uid string) {
+	log.Println("[PushSummary] 开始生成汇总消息")
+	var builder strings.Builder
+	builder.WriteString("兑换汇总:\n")
+	// 假设 g.Dhjl 为 map，其中 key 为产品分类（例如 g.Yf），value 为 map[title][]phone
+	for title, phones := range g.Dhjl[g.Yf] {
+		builder.WriteString(fmt.Sprintf("商品: %s\n", title))
+		for _, phone := range phones {
+			builder.WriteString(fmt.Sprintf("  手机号: %s\n", phone))
 		}
-		// 用汇总内容替换原来的 msg 变量
-		msg := builder.String()
-		sendWxPusher(uid, msg)
-	} else {
-		log.Println("[CheckPushTime] 不在推送时间")
 	}
+	msg := builder.String()
+	sendWxPusher(uid, msg)
 }
 
 // InStringArray 判断字符串是否在数组中

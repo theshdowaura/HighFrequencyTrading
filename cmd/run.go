@@ -57,7 +57,7 @@ func MainLogic(cfg *config.Config) {
 	handleExchangeLog(g)
 
 	// 5. 检查推送（可选）
-	exchange.CheckPushTime()
+	exchange.PushSummary(g, Uid)
 
 	log.Println("===== 高频交易系统结束 =====")
 }
