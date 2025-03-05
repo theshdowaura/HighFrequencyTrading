@@ -25,12 +25,15 @@ type Response struct {
 
 // Send 发送消息到WxPusher
 func Send(content, appToken, uid string) (*Response, error) {
-	if appToken == "" || uid == "" {
-		return nil, errors.New("WXPUSHER_APP_TOKEN 或 WXPUSHER_UID 未设置,将自动使用环境变量")
-	} else {
+	// 如果没传递，则尝试从环境变量获取
+	if appToken == "" {
 		appToken = os.Getenv("WXPUSHER_APP_TOKEN")
+	}
+	if uid == "" {
 		uid = os.Getenv("WXPUSHER_UID")
-		print(appToken, uid)
+	}
+	if appToken == "" || uid == "" {
+		return nil, errors.New("WXPUSHER_APP_TOKEN 或 WXPUSHER_UID 未设置")
 	}
 
 	message := Message{

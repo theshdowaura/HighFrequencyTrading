@@ -27,11 +27,11 @@ type Config struct {
 
 // GlobalVars : 运行期的全局对象
 type GlobalVars struct {
-	Yf    string                       // 当前年月: e.g. "202503"
-	Dhjl  map[string]map[string]string // 兑换日志
-	Jp    map[string]map[string]string // 商品映射
-	Wt    float64
-	Kswt  float64
+	Yf    string                         // 当前年月: e.g. "202503"
+	Dhjl  map[string]map[string][]string // 兑换日志: 年月 -> (话费标题 -> []手机号)
+	Jp    map[string]map[string]string   // 商品映射: 9->map[0.5元话费->aid_0.5], ...
+	Wt    float64                        // 目标 UNIX 时间戳
+	Kswt  float64                        // 偏移量
 	Rs    int32
 	Cache map[string]interface{}
 
@@ -70,20 +70,20 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 func InitGlobalVars(cfg *Config) *GlobalVars {
 	g := &GlobalVars{}
 	g.Yf = time.Now().Format("200601")
-	g.Dhjl = make(map[string]map[string]string)
+	g.Dhjl = make(map[string]map[string][]string)
 	g.Jp = map[string]map[string]string{"9": {}, "13": {}}
 	g.Kswt = 0.1
 
 	// 1. 读取日志
 	dat, err := ioutil.ReadFile(ExchangeLogFile)
 	if err == nil {
-		var tmp map[string]map[string]string
+		var tmp map[string]map[string][]string
 		if json.Unmarshal(dat, &tmp) == nil {
 			g.Dhjl = tmp
 		}
 	}
 	if _, ok := g.Dhjl[g.Yf]; !ok {
-		g.Dhjl[g.Yf] = make(map[string]string)
+		g.Dhjl[g.Yf] = make(map[string][]string)
 	}
 
 	// 2. 加载缓存

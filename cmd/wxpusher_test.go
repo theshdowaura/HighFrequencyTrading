@@ -36,19 +36,19 @@ func TestWxPusherCommand(t *testing.T) {
 		{
 			name: "正常配置测试",
 			yaml: `appToken: "test-token"
-Uid: "test-Uid"`,
+uid: "test-Uid"`,
 			wantErr: false,
 		},
 		{
 			name: "空配置测试",
 			yaml: `appToken: ""
-Uid: ""`,
+uid: ""`,
 			wantErr: false,
 		},
 		{
 			name: "错误格式测试",
 			yaml: `appToken: test-token
-Uid: [invalid-yaml`,
+uid: [invalid-yaml`,
 			wantErr: true,
 		},
 	}
@@ -64,7 +64,7 @@ Uid: [invalid-yaml`,
 			}
 
 			// 执行命令
-			err = subCmd.Execute()
+			err = wxpusherCmd.Execute()
 
 			// 验证结果
 			if (err != nil) != tt.wantErr {
@@ -72,7 +72,7 @@ Uid: [invalid-yaml`,
 			}
 
 			// 清理配置文件
-			os.Remove(configFile)
+			_ = os.Remove(configFile)
 		})
 	}
 }
@@ -96,7 +96,7 @@ func TestWxPusherCommandNoFile(t *testing.T) {
 	}
 	defer os.Chdir(currentDir)
 
-	if err := subCmd.Execute(); err == nil {
+	if err := wxpusherCmd.Execute(); err == nil {
 		t.Error("期望文件不存在时返回错误，但没有")
 	}
 }

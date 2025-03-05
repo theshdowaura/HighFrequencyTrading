@@ -28,12 +28,16 @@ func One(g *config.GlobalVars, phone, title, aid, uid string, client *http.Clien
 
 	if resp.StatusCode == 200 {
 		log.Printf("[One] %s 兑换 %s 成功", phone, title)
-		// 更新兑换日志时加锁保护
-		dhjlMutex.Lock()
-		g.Dhjl[g.Yf][title] += "#" + phone
-		dhjlMutex.Unlock()
 
+		dhjlMutex.Lock()
+		defer dhjlMutex.Unlock()
+
+		// 将 phone 加入切片
+		phones := g.Dhjl[g.Yf][title]
+		phones = append(phones, phone)
+		g.Dhjl[g.Yf][title] = phones
 		g.SaveDhjl()
+
 		sendWxPusher(uid, fmt.Sprintf("%s:%s 兑换成功", phone, title))
 	} else {
 		log.Printf("[One] phone=%s status=%d", phone, resp.StatusCode)
@@ -42,11 +46,9 @@ func One(g *config.GlobalVars, phone, title, aid, uid string, client *http.Clien
 
 // DoHighFreqRequests : 目标时间前3秒空请求强发
 func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *sync.WaitGroup) {
-	defer func() {
-		if wg != nil {
-			wg.Done()
-		}
-	}()
+	if wg != nil {
+		defer wg.Done()
+	}
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -72,11 +74,9 @@ func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *s
 
 // DoHighFreqRealRequests : 目标时间前1秒“真实预热”
 func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string, client *http.Client, wg *sync.WaitGroup) {
-	defer func() {
-		if wg != nil {
-			wg.Done()
-		}
-	}()
+	if wg != nil {
+		defer wg.Done()
+	}
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -109,7 +109,7 @@ func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string,
 
 // Dh : 在 wt 时间到达后正式进行兑换
 func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, client *http.Client) {
-	// 计算等待时间，直接 sleep 整体延时
+	// 计算等待时间，直接 sleep
 	delay := time.Until(time.Unix(int64(wt), 0))
 	if delay > 0 {
 		time.Sleep(delay)
@@ -118,7 +118,7 @@ func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, 
 	One(g, phone, title, aid, uid, client)
 }
 
-// sendWxPusher : 发送消息（从环境变量中获取推送配置）
+// sendWxPusher : 发送消息（从环境变量中获取推送配置，如果未提供参数）
 func sendWxPusher(uid, content string) {
 	appToken := os.Getenv("WXPUSHER_APP_TOKEN")
 	if appToken == "" {
@@ -141,7 +141,7 @@ func sendWxPusher(uid, content string) {
 	log.Printf("[sendWxPusher] uid=%s content=%s, response: %+v", uid, content, resp)
 }
 
-// CheckPushTime : 判断时间段后执行 python 汇总推送
+// CheckPushTime : 判断时间段后执行 python 汇总推送 (示例)
 func CheckPushTime() {
 	now := time.Now()
 	start1 := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 30, 0, now.Location())
@@ -175,10 +175,9 @@ func InStringArray(s string, arr []string) bool {
 	return false
 }
 
-// CalcT : 计算当天 hour=h, minute=59, second=59
+// CalcT : 计算当天 hour=h, minute=00, second=00 的时间戳
 func CalcT(h int) int64 {
 	now := time.Now()
-	// 修正：将 nanosecond 参数设为 0
-	tm := time.Date(now.Year(), now.Month(), now.Day(), h, 59, 59, 0, now.Location())
+	tm := time.Date(now.Year(), now.Month(), now.Day(), h, 0, 0, 0, now.Location())
 	return tm.Unix()
 }

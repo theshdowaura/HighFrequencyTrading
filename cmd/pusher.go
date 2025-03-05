@@ -9,7 +9,7 @@ import (
 
 // WxpusherConfig YAML配置文件对应的结构体
 type WxpusherConfig struct {
-	AppToken string `yaml:"app_token"`
+	AppToken string `yaml:"appToken"`
 	Uid      string `yaml:"uid"`
 	// 如果有其他配置项，可以继续添加
 	Topic string `yaml:"topic,omitempty"`
@@ -66,11 +66,12 @@ var (
 			}
 
 			if wxpusher.AppToken == "" || wxpusher.Uid == "" {
-				println("未设置推送详细配置")
+				println("未设置推送详细配置 (appToken/uid)")
 				return nil
 			}
 
-			// 在这里添加您的 wxpusher 业务逻辑
+			// 在这里添加您的 wxpusher 业务逻辑（如实际发送推送）...
+
 			return nil
 		},
 	}
