@@ -21,11 +21,6 @@ import (
 	"time"
 )
 
-// 初始化：设置随机数种子
-func init() {
-	mathrand.Seed(time.Now().UnixNano())
-}
-
 // 常量定义
 const (
 	des3Key      = "1234567`90koiuyhgtfrdews"
@@ -151,6 +146,9 @@ func UserLoginNormal(phone, password string) (string, error) {
 	uuid0 := randomSample(alphabet, 8)
 	uuid1 := randomSample(alphabet, 4)
 	uuid2 := "4" + randomSample(alphabet, 3)
+	// uuid3 与 uuid4 在本例中未使用，但可按需扩展
+	// uuid3 := randomSample(alphabet, 4)
+	// uuid4 := randomSample(alphabet, 12)
 
 	timestampStr := time.Now().Format("20060102150405")
 	loginAuth := fmt.Sprintf("iPhone 14 15.4.%s%s%s%s%s0$$$0.", uuid0, uuid1, phone, timestampStr, password[:6])
@@ -301,3 +299,23 @@ func GetTicket(phone, userId, token string) (string, error) {
 	}
 	return decryptedTicket, nil
 }
+
+//
+//func main() {
+//	// 设置随机种子
+//	mathrand.Seed(time.Now().UnixNano())
+//
+//	phone := "15331874401"
+//	password := "520533"
+//	fmt.Printf("正在使用手机号 %s 登录...\n", phone)
+//	ticket, err := UserLoginNormal(phone, password)
+//	if err != nil {
+//		fmt.Printf("登录失败: %v\n", err)
+//		return
+//	}
+//	if ticket == "" {
+//		fmt.Println("登录失败，未获取到 ticket。")
+//	} else {
+//		fmt.Printf("登录成功，获取到 ticket: %s\n", ticket)
+//	}
+//}

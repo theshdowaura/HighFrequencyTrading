@@ -32,7 +32,6 @@ func One(g *config.GlobalVars, phone, title, aid, uid string, client *http.Clien
 		dhjlMutex.Lock()
 		defer dhjlMutex.Unlock()
 
-		// 将 phone 加入切片
 		phones := g.Dhjl[g.Yf][title]
 		phones = append(phones, phone)
 		g.Dhjl[g.Yf][title] = phones
@@ -72,7 +71,7 @@ func DoHighFreqRequests(stop time.Time, phone string, client *http.Client, wg *s
 	}
 }
 
-// DoHighFreqRealRequests : 目标时间前1秒“真实预热”
+// DoHighFreqRealRequests : 目标时间前1秒"真实预热"
 func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string, client *http.Client, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
@@ -109,7 +108,6 @@ func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string,
 
 // Dh : 在 wt 时间到达后正式进行兑换
 func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, client *http.Client) {
-	// 计算等待时间，直接 sleep
 	delay := time.Until(time.Unix(int64(wt), 0))
 	if delay > 0 {
 		time.Sleep(delay)

@@ -1,3 +1,4 @@
+// 文件：config/config.go
 package config
 
 import (
@@ -18,7 +19,7 @@ const (
 	DefaultMEXZ      = "0.5,5,6;1,10,3"
 )
 
-// Config : 存放命令行和环境变量
+// Config : 存放命令行和环境变量的配置
 type Config struct {
 	Jdhf string
 	MEXZ string
@@ -27,27 +28,27 @@ type Config struct {
 
 // GlobalVars : 运行期的全局对象
 type GlobalVars struct {
-	Yf    string                         // 当前年月: e.g. "202503"
-	Dhjl  map[string]map[string][]string // 兑换日志: 年月 -> (话费标题 -> []手机号)
-	Jp    map[string]map[string]string   // 商品映射: 9->map[0.5元话费->aid_0.5], ...
+	Yf    string                         // 当前年月: 例如 "202503"
+	Dhjl  map[string]map[string][]string // 兑换日志：年月 -> (话费标题 -> []手机号)
+	Jp    map[string]map[string]string   // 商品映射：例如 "9" -> map["0.5元话费":"aid_0.5"]
 	Wt    float64                        // 目标 UNIX 时间戳
-	Kswt  float64                        // 偏移量
+	Kswt  float64                        // 时间偏移量
 	Rs    int32
-	Cache map[string]interface{}
+	Cache map[string]string // 缓存结构：手机号 -> token 字符串
 
 	MorningExchanges   []string
 	AfternoonExchanges []string
 }
 
-// NewConfig : 环境变量优先级>命令行
+// NewConfig : 根据命令行参数和环境变量生成配置
 func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	cfg := &Config{}
-	// 先用 CLI
+	// 优先使用 CLI 传入的参数
 	cfg.Jdhf = cliJdhf
 	cfg.MEXZ = cliMEXZ
 	cfg.H = cliH
 
-	// 后看 ENV
+	// 环境变量覆盖
 	if envJdhf := os.Getenv("jdhf"); envJdhf != "" {
 		cfg.Jdhf = envJdhf
 	}
@@ -66,7 +67,7 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	return cfg
 }
 
-// InitGlobalVars : 解析日志,缓存,MEXZ
+// InitGlobalVars : 初始化全局变量，包括读取日志、加载缓存和解析商品兑换配置
 func InitGlobalVars(cfg *Config) *GlobalVars {
 	g := &GlobalVars{}
 	g.Yf = time.Now().Format("200601")
@@ -74,7 +75,7 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	g.Jp = map[string]map[string]string{"9": {}, "13": {}}
 	g.Kswt = 0.1
 
-	// 1. 读取日志
+	// 1. 读取兑换日志
 	dat, err := ioutil.ReadFile(ExchangeLogFile)
 	if err == nil {
 		var tmp map[string]map[string][]string
@@ -86,26 +87,26 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 		g.Dhjl[g.Yf] = make(map[string][]string)
 	}
 
-	// 2. 加载缓存
+	// 2. 加载缓存（直接解析为 map[string]string）
 	dat2, err := ioutil.ReadFile(CacheFile)
 	if err == nil {
-		var c map[string]interface{}
+		var c map[string]string
 		if json.Unmarshal(dat2, &c) == nil {
 			g.Cache = c
 		} else {
-			g.Cache = make(map[string]interface{})
+			g.Cache = make(map[string]string)
 		}
 	} else {
-		g.Cache = make(map[string]interface{})
+		g.Cache = make(map[string]string)
 	}
 
-	// 3. 解析 MEXZ
+	// 3. 解析兑换配置 MEXZ
 	parts := strings.Split(cfg.MEXZ, ";")
 	if len(parts) == 2 {
 		g.MorningExchanges = parseExchanges(parts[0])
 		g.AfternoonExchanges = parseExchanges(parts[1])
 	} else {
-		log.Println("[Warn] MEXZ 格式不正确,使用默认")
+		log.Println("[Warn] MEXZ 格式不正确, 使用默认配置")
 		g.MorningExchanges = parseExchanges("0.5,5,6")
 		g.AfternoonExchanges = parseExchanges("1,10,3")
 	}
@@ -113,7 +114,7 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	return g
 }
 
-// parseExchanges : "0.5,5,6" -> ["0.5元话费","5元话费","6元话费"]
+// parseExchanges : 将 "0.5,5,6" 解析成 ["0.5元话费", "5元话费", "6元话费"]
 func parseExchanges(raw string) []string {
 	arr := strings.Split(raw, ",")
 	var res []string
@@ -123,19 +124,19 @@ func parseExchanges(raw string) []string {
 	return res
 }
 
-// SaveDhjl : 保存兑换日志
+// SaveDhjl : 将兑换日志保存到文件中
 func (g *GlobalVars) SaveDhjl() {
 	bt, _ := json.Marshal(g.Dhjl)
 	_ = ioutil.WriteFile(ExchangeLogFile, bt, 0644)
 }
 
-// SaveCache : 保存 token 缓存
+// SaveCache : 将缓存保存到文件中，格式为 map[string]string
 func (g *GlobalVars) SaveCache() {
 	bt, _ := json.Marshal(g.Cache)
 	_ = ioutil.WriteFile(CacheFile, bt, 0644)
 }
 
-// Debug : 可选调试
+// Debug : 可选调试信息
 func (cfg *Config) Debug() {
 	fmt.Printf("[DEBUG] jdhf=%s MEXZ=%s H=%v\n", cfg.Jdhf, cfg.MEXZ, cfg.H)
 }

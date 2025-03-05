@@ -1,3 +1,4 @@
+// 文件：cmd/cmd.go
 package cmd
 
 import (
@@ -20,7 +21,7 @@ import (
 func MainLogic(cfg *config.Config) {
 	log.Println("===== 高频交易系统启动 =====")
 
-	// 1. 初始化全局配置
+	// 1. 初始化全局配置（包括读取日志和缓存）
 	g := config.InitGlobalVars(cfg)
 	if cfg.Jdhf == "" {
 		log.Println("[Error] 未检测到账号信息，退出")
@@ -31,7 +32,7 @@ func MainLogic(cfg *config.Config) {
 	log.Printf("检测到 %d 个账号", len(accounts))
 
 	if cfg.H != nil {
-		log.Printf("[CMD] 强制设定h=%d", *cfg.H)
+		log.Printf("[CMD] 强制设定 h=%d", *cfg.H)
 	}
 
 	client := &http.Client{
@@ -52,17 +53,17 @@ func MainLogic(cfg *config.Config) {
 	// 3. 等待至目标时间
 	waitUntilTargetTime(g.Wt)
 
-	// 4. 处理日志
+	// 4. 处理日志保存
 	handleExchangeLog(g)
 
-	// 5. 检查推送
+	// 5. 检查推送（可选）
 	exchange.CheckPushTime()
 
 	log.Println("===== 高频交易系统结束 =====")
 }
 
 func processAccount(accountStr string, g *config.GlobalVars, client *http.Client, cfg *config.Config) {
-	// 解析账号信息
+	// 解析账号信息（格式：phone#password[#uid]）
 	fields := strings.Split(accountStr, "#")
 	if len(fields) < 2 {
 		log.Printf("[Error] 账号格式错误: %s", accountStr)
@@ -72,14 +73,14 @@ func processAccount(accountStr string, g *config.GlobalVars, client *http.Client
 	password := fields[1]
 	uid := getUID(fields, phone)
 
-	// 获取 ticket（优先尝试缓存，失败则重新登录）
-	ticket := getTicket(phone, password, g)
-	if ticket == "" {
+	// 获取 token（先从缓存中取，缓存中没有则重新登录获取）
+	token := getToken(phone, password, g)
+	if token == "" {
 		return
 	}
 
 	// 执行交易逻辑
-	executeTrading(g, phone, ticket, uid, client, cfg)
+	executeTrading(g, phone, token, uid, client, cfg)
 }
 
 func getUID(fields []string, phone string) string {
@@ -89,32 +90,31 @@ func getUID(fields []string, phone string) string {
 	return phone
 }
 
-func getTicket(phone, password string, g *config.GlobalVars) string {
-	// 尝试使用缓存
-	if v, ok := g.Cache[phone]; ok {
-		log.Printf("[Cache] phone=%s 使用缓存", phone)
-		if vm, ok := v.(map[string]interface{}); ok {
-			if userId, ok1 := vm["userId"].(string); ok1 {
-				if token, ok2 := vm["token"].(string); ok2 {
-					if tk, err := sign.GetTicket(phone, userId, token); err == nil {
-						return tk
-					}
-				}
-			}
-		}
+// getToken 封装缓存处理逻辑：先尝试从缓存中取 token，否则重新登录获取
+func getToken(phone, password string, g *config.GlobalVars) string {
+	// 1. 如果缓存中已有 token，直接返回
+	if cachedToken, ok := g.Cache[phone]; ok {
+		log.Printf("[Cache] phone=%s 命中缓存", phone)
+		// 如有需要，可在此处验证 token 是否依然有效
+		return cachedToken
 	}
 
-	// 缓存无效，重新登录
-	log.Printf("[Login] phone=%s", phone)
-	tk, err := sign.UserLoginNormal(phone, password)
+	// 2. 缓存中没有，则重新登录
+	log.Printf("[Login] phone=%s 开始重新登录", phone)
+	token, err := sign.UserLoginNormal(phone, password)
 	if err != nil {
 		log.Printf("[Error] phone=%s 登录失败: %v", phone, err)
 		return ""
 	}
-	return tk
+
+	// 3. 登录成功后，将新 token 存入缓存并写回文件
+	g.Cache[phone] = token
+	g.SaveCache()
+
+	return token
 }
 
-func executeTrading(g *config.GlobalVars, phone, ticket, uid string, client *http.Client, cfg *config.Config) {
+func executeTrading(g *config.GlobalVars, phone, token, uid string, client *http.Client, cfg *config.Config) {
 	log.Printf("[Trading] phone=%s", phone)
 
 	// 获取商品列表，并更新全局产品信息
@@ -136,12 +136,12 @@ func executeTrading(g *config.GlobalVars, phone, ticket, uid string, client *htt
 	// 执行实际交易
 	var tradeWg sync.WaitGroup
 	for title, aid := range products {
-		// 修正：传递 int32(phoneNum) 而非 fmt.Sprint(phoneNum)
+		// 检查是否已兑换
 		if isAlreadyTraded(g, title, int32(phoneNum)) {
 			log.Printf("[Skip] %d %s 已兑换", phoneNum, title)
 			continue
 		}
-		// 如果距离目标时间超过30秒，放弃
+		// 如果距离目标时间超过30秒，则退出
 		if isWaitingTooLong(targetTime) {
 			log.Println("[Timeout] 等待时间超过30秒，退出")
 			return
@@ -209,7 +209,7 @@ func collectProductInfo(products map[string]string) ([]string, []string) {
 	return titles, aids
 }
 
-// executeWarmupStages 独立调度预热阶段：3秒前抢发、1秒前实际预热
+// executeWarmupStages 独立调度预热阶段：3秒前空请求、1秒前实际预热
 func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []string, client *http.Client, targetTime float64) {
 	var wg sync.WaitGroup
 
@@ -247,7 +247,7 @@ func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []strin
 	wg.Wait()
 }
 
-// scheduleStage 等待指定时间点，然后执行任务
+// scheduleStage 在指定时间点等待后执行任务
 func scheduleStage(scheduledTime time.Time, stageName string, task func()) {
 	waitDuration := time.Until(scheduledTime)
 	if waitDuration > 0 {
@@ -258,16 +258,15 @@ func scheduleStage(scheduledTime time.Time, stageName string, task func()) {
 	task()
 }
 
-// isAlreadyTraded 使用切片来检查是否已包含目标手机号
+// isAlreadyTraded 判断当前商品是否已兑换（通过查日志）
 func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
 	phones, ok := g.Dhjl[g.Yf][title]
 	if !ok {
-		// 说明当前title还没有任何兑换记录, 初始化为空切片
+		// 当前商品尚无兑换记录，初始化为空切片
 		g.Dhjl[g.Yf][title] = []string{}
 		return false
 	}
 	phoneStr := fmt.Sprint(phone)
-	// 遍历切片检查是否存在
 	for _, p := range phones {
 		if p == phoneStr {
 			return true
@@ -276,7 +275,7 @@ func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
 	return false
 }
 
-// isWaitingTooLong 当当前时间与目标时间差大于30秒时返回true
+// isWaitingTooLong 若当前时间与目标时间差超过30秒则返回 true
 func isWaitingTooLong(targetTime float64) bool {
 	return float64(time.Now().Unix())-targetTime > 30
 }
@@ -301,11 +300,10 @@ func handleExchangeLog(g *config.GlobalVars) {
 				if phone == "" {
 					continue
 				}
-				phoneStr := phone
-				if _, ok2 := dhjl2[phoneStr]; !ok2 {
-					dhjl2[phoneStr] = make(map[string][]string)
+				if _, ok2 := dhjl2[phone]; !ok2 {
+					dhjl2[phone] = make(map[string][]string)
 				}
-				dhjl2[phoneStr][nowMonth] = append(dhjl2[phoneStr][nowMonth], fee)
+				dhjl2[phone][nowMonth] = append(dhjl2[phone][nowMonth], fee)
 			}
 		}
 	}
