@@ -20,7 +20,7 @@ import (
 func MainLogic(cfg *config.Config) {
 	log.Println("===== 高频交易系统启动 =====")
 
-	// 1. 初始化全局配置（包括读取日志和缓存）
+	// 1. 初始化全局配置
 	g := config.InitGlobalVars(cfg)
 	if cfg.Jdhf == "" {
 		log.Println("[Error] 未检测到账号信息，退出")
@@ -34,9 +34,7 @@ func MainLogic(cfg *config.Config) {
 		log.Printf("[CMD] 强制设定 h=%d", *cfg.H)
 	}
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	// 2. 并发处理每个账号
 	var wg sync.WaitGroup
@@ -50,12 +48,18 @@ func MainLogic(cfg *config.Config) {
 	wg.Wait()
 
 	// 3. 等待至目标时间
-	waitUntilTargetTime(g.Wt)
+	//   这里要读 g.Wt，注意加锁
+	g.Mu.RLock()
+	wt := g.Wt
+	g.Mu.RUnlock()
+
+	waitUntilTargetTime(wt)
 
 	// 4. 处理日志保存
 	handleExchangeLog(g)
 
 	// 5. 检查推送（可选）
+	//   这里 Uid 是啥需要看你的实际代码处
 	exchange.PushSummary(g, Uid) // 如有需要可调整传入参数
 
 	log.Println("===== 高频交易系统结束 =====")
@@ -72,7 +76,7 @@ func processAccount(accountStr string, g *config.GlobalVars, client *http.Client
 	password := fields[1]
 	uid := getUID(fields, phone)
 
-	// 获取 token（先从缓存中取，缓存中没有则重新登录获取）
+	// 获取 token
 	token := getToken(phone, password, g)
 	if token == "" {
 		return
@@ -91,11 +95,17 @@ func getUID(fields []string, phone string) string {
 
 // getToken 封装缓存处理逻辑：先尝试从缓存中取 token，否则重新登录获取
 func getToken(phone, password string, g *config.GlobalVars) string {
-	if cachedToken, ok := g.Cache[phone]; ok {
+	// 读缓存时加读锁
+	g.Mu.RLock()
+	cachedToken, ok := g.Cache[phone]
+	g.Mu.RUnlock()
+
+	if ok {
 		log.Printf("[Cache] phone=%s 命中缓存", phone)
 		return cachedToken
 	}
 
+	// 缓存中没有则重新登录
 	log.Printf("[Login] phone=%s 开始重新登录", phone)
 	token, err := sign.UserLoginNormal(phone, password)
 	if err != nil {
@@ -103,8 +113,11 @@ func getToken(phone, password string, g *config.GlobalVars) string {
 		return ""
 	}
 
+	// 写缓存时加写锁
+	g.Mu.Lock()
 	g.Cache[phone] = token
-	g.SaveCache()
+	g.SaveCache() // 这里若也会操作 g.Cache 等，需要仍在写锁里
+	g.Mu.Unlock()
 
 	return token
 }
@@ -118,19 +131,30 @@ func executeTrading(g *config.GlobalVars, phone, token, uid string, client *http
 
 	// 确定交易时间（9点或13点）
 	tradeHour := determineTradeHour(cfg)
-	targetTime := calculateTargetTime(tradeHour, g)
+
+	// 计算 targetTime，需要读 g.Kswt
+	g.Mu.RLock()
+	kswt := g.Kswt
+	g.Mu.RUnlock()
+
+	targetTime := float64(exchange.CalcT(tradeHour)) + kswt
+
+	// 读出 g.Jp[...]
+	g.Mu.RLock()
 	products := g.Jp[fmt.Sprintf("%d", tradeHour)]
+	g.Mu.RUnlock()
 
 	// 收集商品信息
 	titles, aids := collectProductInfo(products)
 
-	// 执行预热阶段（3秒前抢发、1秒前实际预热）
+	// 执行预热阶段
 	phoneNum, _ := strconv.ParseInt(phone, 10, 32)
 	executeWarmupStages(g, int32(phoneNum), titles, aids, client, targetTime)
 
 	// 执行实际交易
 	var tradeWg sync.WaitGroup
 	for title, aid := range products {
+		// 判断是否已交易
 		if isAlreadyTraded(g, title, int32(phoneNum)) {
 			log.Printf("[Skip] %d %s 已兑换", phoneNum, title)
 			continue
@@ -168,11 +192,21 @@ func getTradeItems() []struct {
 	}
 }
 
+// updateGlobalProducts 会修改 g.Jp，因此需要加写锁
 func updateGlobalProducts(g *config.GlobalVars, items []struct{ Title, ID string }) {
+	// 先把需要的切片取出来（如果你需要多次访问，可以先拷贝到局部变量里）
+	g.Mu.RLock()
+	morningEx := g.MorningExchanges
+	afternoonEx := g.AfternoonExchanges
+	g.Mu.RUnlock()
+
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
 	for _, item := range items {
-		if exchange.InStringArray(item.Title, g.MorningExchanges) {
+		if exchange.InStringArray(item.Title, morningEx) {
 			g.Jp["9"][item.Title] = item.ID
-		} else if exchange.InStringArray(item.Title, g.AfternoonExchanges) {
+		} else if exchange.InStringArray(item.Title, afternoonEx) {
 			g.Jp["13"][item.Title] = item.ID
 		}
 	}
@@ -189,11 +223,6 @@ func determineTradeHour(cfg *config.Config) int {
 	return 13
 }
 
-func calculateTargetTime(hour int, g *config.GlobalVars) float64 {
-	target := exchange.CalcT(hour)
-	return float64(target) + g.Kswt
-}
-
 func collectProductInfo(products map[string]string) ([]string, []string) {
 	var titles, aids []string
 	for title, aid := range products {
@@ -203,7 +232,6 @@ func collectProductInfo(products map[string]string) ([]string, []string) {
 	return titles, aids
 }
 
-// executeWarmupStages 独立调度预热阶段：3秒前空请求、1秒前实际预热
 func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []string, client *http.Client, targetTime float64) {
 	var wg sync.WaitGroup
 
@@ -238,7 +266,6 @@ func executeWarmupStages(g *config.GlobalVars, phone int32, titles, aids []strin
 	wg.Wait()
 }
 
-// scheduleStage 在指定时间点等待后执行任务
 func scheduleStage(scheduledTime time.Time, stageName string, task func()) {
 	waitDuration := time.Until(scheduledTime)
 	if waitDuration > 0 {
@@ -249,13 +276,27 @@ func scheduleStage(scheduledTime time.Time, stageName string, task func()) {
 	task()
 }
 
-// isAlreadyTraded 判断当前商品是否已兑换（通过查日志）
+// isAlreadyTraded 读/写 g.Dhjl，需要加锁
 func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
-	phones, ok := g.Dhjl[g.Yf][title]
+	// 这里要读 g.Yf
+	g.Mu.RLock()
+	yf := g.Yf
+	g.Mu.RUnlock()
+
+	// 再读/写 Dhjl[yf]
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	phones, ok := g.Dhjl[yf][title]
 	if !ok {
-		g.Dhjl[g.Yf][title] = []string{}
+		// 若原本没有此 title 列表，就初始化
+		if g.Dhjl[yf] == nil {
+			g.Dhjl[yf] = make(map[string][]string)
+		}
+		g.Dhjl[yf][title] = []string{}
 		return false
 	}
+
 	phoneStr := fmt.Sprint(phone)
 	for _, p := range phones {
 		if p == phoneStr {
@@ -265,12 +306,10 @@ func isAlreadyTraded(g *config.GlobalVars, title string, phone int32) bool {
 	return false
 }
 
-// isWaitingTooLong 判断若当前时间与目标时间差超过30分钟则返回 true
 func isWaitingTooLong(targetTime float64) bool {
 	return float64(time.Now().Unix())-targetTime > 1800
 }
 
-// waitUntilTargetTime 等待直到目标时间到达
 func waitUntilTargetTime(targetTime float64) {
 	for {
 		if float64(time.Now().Unix()) >= targetTime {
@@ -280,12 +319,28 @@ func waitUntilTargetTime(targetTime float64) {
 	}
 }
 
+// handleExchangeLog 读 g.Dhjl 并写文件，也要加锁
 func handleExchangeLog(g *config.GlobalVars) {
 	nowMonth := time.Now().Format("200601")
+
+	// 读兑换记录
+	g.Mu.RLock()
+	oldLog, ok := g.Dhjl[nowMonth]
+	g.Mu.RUnlock()
+
 	dhjl2 := make(map[string]map[string][]string)
 
-	if oldLog, ok := g.Dhjl[nowMonth]; ok {
+	if ok {
+		// 这里要遍历 oldLog，读 oldLog[fee]
+		// 为安全，可以先把 oldLog 拷贝到临时变量，再解锁
+		g.Mu.RLock()
+		copyOldLog := make(map[string][]string)
 		for fee, phones := range oldLog {
+			copyOldLog[fee] = append([]string(nil), phones...)
+		}
+		g.Mu.RUnlock()
+
+		for fee, phones := range copyOldLog {
 			for _, phone := range phones {
 				if phone == "" {
 					continue

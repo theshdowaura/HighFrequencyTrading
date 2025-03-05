@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync" // 新增
 	"time"
 )
 
@@ -38,6 +39,8 @@ type GlobalVars struct {
 
 	MorningExchanges   []string
 	AfternoonExchanges []string
+
+	Mu sync.RWMutex // 新增：读写锁，保证并发安全
 }
 
 // NewConfig : 根据命令行参数和环境变量生成配置
@@ -48,7 +51,7 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	cfg.MEXZ = cliMEXZ
 	cfg.H = cliH
 
-	// 环境变量覆盖
+	// 如果有同名环境变量，则覆盖
 	if envJdhf := os.Getenv("jdhf"); envJdhf != "" {
 		cfg.Jdhf = envJdhf
 	}
@@ -69,10 +72,13 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 
 // InitGlobalVars : 初始化全局变量，包括读取日志、加载缓存和解析商品兑换配置
 func InitGlobalVars(cfg *Config) *GlobalVars {
-	g := &GlobalVars{}
+	g := &GlobalVars{
+		Dhjl:  make(map[string]map[string][]string),
+		Jp:    map[string]map[string]string{"9": {}, "13": {}},
+		Cache: make(map[string]string),
+	}
+
 	g.Yf = time.Now().Format("200601")
-	g.Dhjl = make(map[string]map[string][]string)
-	g.Jp = map[string]map[string]string{"9": {}, "13": {}}
 	g.Kswt = 0.1
 
 	// 1. 读取兑换日志
@@ -80,24 +86,29 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	if err == nil {
 		var tmp map[string]map[string][]string
 		if json.Unmarshal(dat, &tmp) == nil {
+			// 写 g.Dhjl，需要加写锁
+			g.Mu.Lock()
 			g.Dhjl = tmp
+			g.Mu.Unlock()
 		}
 	}
+
+	// 确保有当前月份的 key
+	g.Mu.Lock()
 	if _, ok := g.Dhjl[g.Yf]; !ok {
 		g.Dhjl[g.Yf] = make(map[string][]string)
 	}
+	g.Mu.Unlock()
 
 	// 2. 加载缓存（直接解析为 map[string]string）
 	dat2, err := ioutil.ReadFile(CacheFile)
 	if err == nil {
 		var c map[string]string
 		if json.Unmarshal(dat2, &c) == nil {
+			g.Mu.Lock()
 			g.Cache = c
-		} else {
-			g.Cache = make(map[string]string)
+			g.Mu.Unlock()
 		}
-	} else {
-		g.Cache = make(map[string]string)
 	}
 
 	// 3. 解析兑换配置 MEXZ
@@ -126,13 +137,21 @@ func parseExchanges(raw string) []string {
 
 // SaveDhjl : 将兑换日志保存到文件中
 func (g *GlobalVars) SaveDhjl() {
+	// 读 g.Dhjl，需要加读锁
+	g.Mu.RLock()
 	bt, _ := json.Marshal(g.Dhjl)
+	g.Mu.RUnlock()
+
 	_ = ioutil.WriteFile(ExchangeLogFile, bt, 0644)
 }
 
 // SaveCache : 将缓存保存到文件中，格式为 map[string]string
 func (g *GlobalVars) SaveCache() {
+	// 读 g.Cache，需要加读锁
+	g.Mu.RLock()
 	bt, _ := json.Marshal(g.Cache)
+	g.Mu.RUnlock()
+
 	_ = ioutil.WriteFile(CacheFile, bt, 0644)
 }
 
