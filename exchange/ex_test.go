@@ -46,5 +46,5 @@ func TestCheckPushTime(t *testing.T) {
 	t.Logf("测试推送时间段设为: %v - %v", start, end)
 
 	t.Log("执行 CheckPushTime 测试")
-	CheckPushTime(g, "dummyUid")
+	PushSummary(g, "dummyUid")
 }
