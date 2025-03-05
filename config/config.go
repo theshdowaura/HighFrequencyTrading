@@ -1,4 +1,3 @@
-// 文件：config/config.go
 package config
 
 import (
@@ -9,7 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync" // 新增
+	"sync"
 	"time"
 )
 
@@ -31,25 +30,25 @@ type Config struct {
 type GlobalVars struct {
 	Yf    string                         // 当前年月: 例如 "202503"
 	Dhjl  map[string]map[string][]string // 兑换日志：年月 -> (话费标题 -> []手机号)
-	Jp    map[string]map[string]string   // 商品映射：例如 "9" -> map["0.5元话费":"aid_0.5"]
+	Jp    map[string]map[string]string   // 商品映射
 	Wt    float64                        // 目标 UNIX 时间戳
 	Kswt  float64                        // 时间偏移量
 	Rs    int32
-	Cache map[string]string // 缓存结构：手机号 -> token 字符串
+	Cache map[string]string // 缓存结构：手机号 -> token
 
 	MorningExchanges   []string
 	AfternoonExchanges []string
 
-	Mu sync.RWMutex // 新增：读写锁，保证并发安全
+	Mu sync.RWMutex // 统一的读写锁
 }
 
 // NewConfig : 根据命令行参数和环境变量生成配置
 func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
-	cfg := &Config{}
-	// 优先使用 CLI 传入的参数
-	cfg.Jdhf = cliJdhf
-	cfg.MEXZ = cliMEXZ
-	cfg.H = cliH
+	cfg := &Config{
+		Jdhf: cliJdhf,
+		MEXZ: cliMEXZ,
+		H:    cliH,
+	}
 
 	// 如果有同名环境变量，则覆盖
 	if envJdhf := os.Getenv("jdhf"); envJdhf != "" {
@@ -70,7 +69,7 @@ func NewConfig(cliJdhf, cliMEXZ string, cliH *int) *Config {
 	return cfg
 }
 
-// InitGlobalVars : 初始化全局变量，包括读取日志、加载缓存和解析商品兑换配置
+// InitGlobalVars : 初始化全局变量
 func InitGlobalVars(cfg *Config) *GlobalVars {
 	g := &GlobalVars{
 		Dhjl:  make(map[string]map[string][]string),
@@ -86,32 +85,25 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	if err == nil {
 		var tmp map[string]map[string][]string
 		if json.Unmarshal(dat, &tmp) == nil {
-			// 写 g.Dhjl，需要加写锁
-			g.Mu.Lock()
+			// 写入 Dhjl 需要加写锁，但此处 g 尚未被多协程共享
 			g.Dhjl = tmp
-			g.Mu.Unlock()
 		}
 	}
-
-	// 确保有当前月份的 key
-	g.Mu.Lock()
+	// 确保有当前月份key
 	if _, ok := g.Dhjl[g.Yf]; !ok {
 		g.Dhjl[g.Yf] = make(map[string][]string)
 	}
-	g.Mu.Unlock()
 
-	// 2. 加载缓存（直接解析为 map[string]string）
+	// 2. 加载缓存
 	dat2, err := ioutil.ReadFile(CacheFile)
 	if err == nil {
 		var c map[string]string
 		if json.Unmarshal(dat2, &c) == nil {
-			g.Mu.Lock()
 			g.Cache = c
-			g.Mu.Unlock()
 		}
 	}
 
-	// 3. 解析兑换配置 MEXZ
+	// 3. 解析 MEXZ
 	parts := strings.Split(cfg.MEXZ, ";")
 	if len(parts) == 2 {
 		g.MorningExchanges = parseExchanges(parts[0])
@@ -125,7 +117,7 @@ func InitGlobalVars(cfg *Config) *GlobalVars {
 	return g
 }
 
-// parseExchanges : 将 "0.5,5,6" 解析成 ["0.5元话费", "5元话费", "6元话费"]
+// parseExchanges : 将 "0.5,5,6" 转成 ["0.5元话费","5元话费","6元话费"]
 func parseExchanges(raw string) []string {
 	arr := strings.Split(raw, ",")
 	var res []string
@@ -135,9 +127,9 @@ func parseExchanges(raw string) []string {
 	return res
 }
 
-// SaveDhjl : 将兑换日志保存到文件中
+// SaveDhjl : 将兑换日志保存到文件
 func (g *GlobalVars) SaveDhjl() {
-	// 读 g.Dhjl，需要加读锁
+	// 读锁即可，因为我们只需要读取 Dhjl 并序列化
 	g.Mu.RLock()
 	bt, _ := json.Marshal(g.Dhjl)
 	g.Mu.RUnlock()
@@ -145,9 +137,9 @@ func (g *GlobalVars) SaveDhjl() {
 	_ = ioutil.WriteFile(ExchangeLogFile, bt, 0644)
 }
 
-// SaveCache : 将缓存保存到文件中，格式为 map[string]string
+// SaveCache : 将缓存保存到文件
 func (g *GlobalVars) SaveCache() {
-	// 读 g.Cache，需要加读锁
+	// 同理，读锁
 	g.Mu.RLock()
 	bt, _ := json.Marshal(g.Cache)
 	g.Mu.RUnlock()
@@ -155,7 +147,7 @@ func (g *GlobalVars) SaveCache() {
 	_ = ioutil.WriteFile(CacheFile, bt, 0644)
 }
 
-// Debug : 可选调试信息
+// Debug : 调试用
 func (cfg *Config) Debug() {
 	fmt.Printf("[DEBUG] jdhf=%s MEXZ=%s H=%v\n", cfg.Jdhf, cfg.MEXZ, cfg.H)
 }

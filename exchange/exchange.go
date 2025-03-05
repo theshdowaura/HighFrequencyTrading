@@ -13,10 +13,9 @@ import (
 	"time"
 )
 
-// dhjlMutex 用于保护 g.Dhjl 的并发读写
-var dhjlMutex sync.Mutex
+// 这里原先有一个 dhjlMutex，现在已去除，统一使用 g.Mu
 
-// One 发送最终兑换请求，兑换成功后记录手机号但不立即推送消息
+// One 发送最终兑换请求，成功后记录手机号
 func One(g *config.GlobalVars, phone, title, aid, uid string, client *http.Client) {
 	url := "https://wapact.189.cn:9001/gateway/standExchange/detailNew/exchange"
 	body := fmt.Sprintf(`{"activityId":"%s"}`, aid)
@@ -28,14 +27,17 @@ func One(g *config.GlobalVars, phone, title, aid, uid string, client *http.Clien
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
+		// TODO: 此处最好解析响应体JSON，确认成功再做记录
 		log.Printf("[One] %s 兑换 %s 成功", phone, title)
-		dhjlMutex.Lock()
+
+		// 写 Dhjl 需要加写锁
+		g.Mu.Lock()
 		phones := g.Dhjl[g.Yf][title]
 		phones = append(phones, phone)
 		g.Dhjl[g.Yf][title] = phones
-		dhjlMutex.Unlock()
-
+		// 记完日志后保存
 		g.SaveDhjl()
+		g.Mu.Unlock()
 	} else {
 		log.Printf("[One] phone=%s status=%d", phone, resp.StatusCode)
 	}
@@ -104,7 +106,7 @@ func DoHighFreqRealRequests(stop time.Time, phone string, titles, aids []string,
 	}
 }
 
-// Dh 在指定时间 wt 到达后正式进行兑换请求
+// Dh 在指定时间 wt 到达后进行兑换请求
 func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, client *http.Client) {
 	delay := time.Until(time.Unix(int64(wt), 0))
 	if delay > 0 {
@@ -114,17 +116,22 @@ func Dh(g *config.GlobalVars, phone, title, aid string, wt float64, uid string, 
 	One(g, phone, title, aid, uid, client)
 }
 
-// sendWxPusher 发送消息，消息内容包含 title 与 phone 信息
+// sendWxPusher 发送消息
 func sendWxPusher(uid, content string) {
+	// 优先环境变量
 	appToken := os.Getenv("WXPUSHER_APP_TOKEN")
+	// 再看 util.Wxpusher
 	var wxpusher util.Wxpusher
 	if appToken == "" && wxpusher.AppToken == "" {
 		log.Println("[sendWxPusher] WXPUSHER_APP_TOKEN 未配置")
 		return
 	} else {
-		appToken = wxpusher.AppToken
+		// 如果空，就用 wxpusher.AppToken；否则覆盖
+		if wxpusher.AppToken != "" {
+			appToken = wxpusher.AppToken
+		}
 	}
-	// 如果 uid 为空，则尝试从环境变量中获取
+
 	if uid == "" && wxpusher.Uid == "" {
 		uid = os.Getenv("WXPUSHER_UID")
 		if uid == "" {
@@ -132,8 +139,11 @@ func sendWxPusher(uid, content string) {
 			return
 		}
 	} else {
-		uid = wxpusher.Uid
+		if wxpusher.Uid != "" {
+			uid = wxpusher.Uid
+		}
 	}
+
 	resp, err := push.Send(content, appToken, uid)
 	if err != nil {
 		log.Printf("[sendWxPusher] error: %v", err)
@@ -142,14 +152,16 @@ func sendWxPusher(uid, content string) {
 	log.Printf("[sendWxPusher] uid=%s content=%s, response: %+v", uid, content, resp)
 }
 
-// CheckPushTime 判断时间段，若在指定推送时间则生成汇总消息并推送出去
-// 此函数需要传入全局变量 g 与 uid，以便获取兑换记录并进行消息推送
-// PushSummary 生成兑换汇总消息并推送
+// PushSummary 生成兑换汇总并推送
 func PushSummary(g *config.GlobalVars, uid string) {
 	log.Println("[PushSummary] 开始生成汇总消息")
+
+	// 读锁读取 Dhjl
+	g.Mu.RLock()
+	defer g.Mu.RUnlock()
+
 	var builder strings.Builder
 	builder.WriteString("兑换汇总:\n")
-	// 假设 g.Dhjl 为 map，其中 key 为产品分类（例如 g.Yf），value 为 map[title][]phone
 	for title, phones := range g.Dhjl[g.Yf] {
 		builder.WriteString(fmt.Sprintf("商品: %s\n", title))
 		for _, phone := range phones {
@@ -160,7 +172,7 @@ func PushSummary(g *config.GlobalVars, uid string) {
 	sendWxPusher(uid, msg)
 }
 
-// InStringArray 判断字符串是否在数组中
+// InStringArray 判断字符串是否在切片中
 func InStringArray(s string, arr []string) bool {
 	for _, v := range arr {
 		if v == s {
@@ -170,7 +182,7 @@ func InStringArray(s string, arr []string) bool {
 	return false
 }
 
-// CalcT 计算当天 hour=h, minute=00, second=00 的时间戳
+// CalcT 计算当日特定小时(h):00:00的时间戳
 func CalcT(h int) int64 {
 	now := time.Now()
 	tm := time.Date(now.Year(), now.Month(), now.Day(), h, 0, 0, 0, now.Location())

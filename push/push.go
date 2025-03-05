@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// Message 定义发送消息的请求结构
+// Message 请求体
 type Message struct {
 	AppToken    string   `json:"appToken"`
 	Content     string   `json:"content"`
@@ -16,7 +16,7 @@ type Message struct {
 	UIDs        []string `json:"uids"`
 }
 
-// Response 定义API响应结构
+// Response 响应体
 type Response struct {
 	Code    int    `json:"code"`
 	Msg     string `json:"msg"`
@@ -25,7 +25,7 @@ type Response struct {
 
 // Send 发送消息到WxPusher
 func Send(content, appToken, uid string) (*Response, error) {
-	// 如果没传递，则尝试从环境变量获取
+	// 若未传递，则从环境变量获取
 	if appToken == "" {
 		appToken = os.Getenv("WXPUSHER_APP_TOKEN")
 	}
@@ -62,6 +62,5 @@ func Send(content, appToken, uid string) (*Response, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
-
 	return &response, nil
 }
